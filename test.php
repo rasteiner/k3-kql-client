@@ -5,12 +5,18 @@ require 'Interpreter.php';
 use Rasteiner\KQLParser\Interpreter;
 
 class Cat {
+    private $_age = 12;
     function say($what = 'meow')
     {
         return $what;
     }
     function age() {
-        return 12;
+        return $this->_age;
+    }
+    function makeKitten() {
+        $kitten = new Cat();
+        $kitten->_age = 1;
+        return $kitten;
     }
 }
 
@@ -35,6 +41,11 @@ $interpreter = new Interpreter([
 //accessing and running stuff
 var_dump($interpreter->parse('site.sum(number1, site.sum(12, site.foobar.cat.age))'));
 //> float(1024)
+
+//accessing return value of methods
+var_dump($interpreter->parse('site.sum(site.foobar.cat.age, site.foobar.cat.makeKitten().age)'));
+//> int(13)
+
 
 //strings 
 var_dump($interpreter->parse('site.foobar.cat.say("hello \"world\"")'));
