@@ -83,7 +83,7 @@ class SymbolNode extends Node {
                 return null;
             } else if(is_object($parent)) {
                 if(property_exists($parent, $this->name)) {
-                    return $this->{$this->name};
+                    return $parent->{$this->name};
                 }
                 return call_user_func_array([$parent, $this->name], []);
             }

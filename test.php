@@ -6,15 +6,20 @@ use Rasteiner\KQLParser\Interpreter;
 
 class Cat {
     private $_age = 12;
-    function say($what = 'meow')
-    {
+    public $name = null;
+
+    function __construct($name = 'Fluffy') {
+        $this->name = $name;
+    }
+
+    function say($what = 'meow') {
         return $what;
     }
     function age() {
         return $this->_age;
     }
     function makeKitten() {
-        $kitten = new Cat();
+        $kitten = new Cat($this->name . '\'s Kitten');
         $kitten->_age = 1;
         return $kitten;
     }
@@ -45,6 +50,10 @@ var_dump($interpreter->parse('site.sum(number1, site.sum(12, site.foobar.cat.age
 //accessing return value of methods
 var_dump($interpreter->parse('site.sum(site.foobar.cat.age, site.foobar.cat.makeKitten().age)'));
 //> int(13)
+
+//accessing properties
+var_dump($interpreter->parse('site.foobar.cat.name'));
+//> string(6) "Fluffy"
 
 
 //strings 
