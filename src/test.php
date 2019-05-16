@@ -1,6 +1,6 @@
 <?php 
 
-require 'Interpreter.php';
+require __DIR__ . '/Interpreter.php';
 
 use Rasteiner\KQLParser\Interpreter;
 
@@ -25,26 +25,28 @@ class Cat {
     }
 }
 
-// here I give the evaluator a state to work on. These are the allowed starting variables. 
-$interpreter = new Interpreter([ 
-    'number1' => 1000,
 
-    'site' => [
-        'foobar' => [
-            'cat' => new Cat()
-        ],
-        'sum' => function($a = 1, $b = 1) {
-            return $a + $b;
-        },
-        'sumAll' => function(array $numbers) {
-            return array_reduce($numbers, function($all, $one) {return $all + $one;}, 0);
-        }
-    ]
-]);
 
 
 function test($q, $expected) {
-    global $interpreter;
+    // here I give the evaluator a state to work on. These are the allowed starting variables. 
+    $interpreter = new Interpreter([
+        'number1' => 1000,
+
+        'site' => [
+            'foobar' => [
+                'cat' => new Cat()
+            ],
+            'sum' => function ($a = 1, $b = 1) {
+                return $a + $b;
+            },
+            'sumAll' => function (array $numbers) {
+                return array_reduce($numbers, function ($all, $one) {
+                    return $all + $one;
+                }, 0);
+            }
+        ]
+    ]);
 
     $result = $interpreter->parse($q);
     if($result == $expected) {

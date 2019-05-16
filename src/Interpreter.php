@@ -7,6 +7,11 @@ require 'Parser.php';
 class Interpreter
 {
     /**
+     * @var array
+     */
+    private static $astCache = [];
+
+    /**
      * @var Evaluator
      */
     private $ev;
@@ -24,7 +29,12 @@ class Interpreter
 
     public function parse($text)
     {
-        $ast = $this->parser->parse($text);
+        if(isset(self::$astCache[$text])) {
+            $ast = self::$astCache[$text];
+        } else {
+            $ast = $this->parser->parse($text);
+            self::$astCache[$text] = $ast;
+        }
         
         return $this->ev->eval($ast);
     }

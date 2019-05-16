@@ -1,6 +1,8 @@
 <?php
 namespace Rasteiner\KQLParser;
 use \Exception;
+use Kirby\Toolkit\Collection;
+use Kirby\Cms\Field;
 
 abstract class Node {
     public $type;
@@ -41,10 +43,11 @@ class AccessNode extends Node {
             }
             return null;
         } else if (is_object($left)) {
-            if (property_exists($left, $right)) {
-                return $left->{$right};
-            } else if(method_exists($left, $right)) {
+            
+            if(is_callable([$left, $right])) {
                 return \Closure::fromCallable([$left, $right]);
+            } else if (property_exists($left, $right)) {
+                return $left->{$right};
             }
         }
     }
@@ -63,10 +66,25 @@ class NullCoalesceNode extends Node {
 
         try {
             $left = $this->left->eval($context);
+            if(is_callable($left)) {
+                $left = call_user_func($left);
+            }
         } catch (Exception $e) {
             //silently fail left evaluation
         }
         
+        if($left instanceof Field) {
+            //Kirby specific method to evaluate if a field is empty
+            if($left->isEmpty()) {
+                $left = false;
+            }
+        } else if ($left instanceof Collection) {
+            //Kirby specific method to evaluate if a collection is empty
+            if ($left->count() === 0) {
+                $left = false;
+            }
+        }
+
         if($left) {
             return $left;
         } else {
@@ -107,8 +125,6 @@ class MethodNode extends Node {
         if(is_callable($method)) {
             return call_user_func_array($method, $params);  
         } else  {
-            echo "method:";
-            var_dump($method);
             throw new Exception("Method not callable, $method", 1);
         }
 
