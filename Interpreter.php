@@ -24,7 +24,9 @@ class Interpreter
 
     public function parse($text)
     {
-        return $this->ev->eval($this->parser->parse($text));
+        $ast = $this->parser->parse($text);
+        
+        return $this->ev->eval($ast);
     }
 }
 
@@ -45,7 +47,12 @@ class Evaluator
                 return Evaluator::eval($node);
             }, $node);
         } else {
-            return $node->eval($this);
+            $return = $node->eval($this);
+            if (is_callable($return)) {
+                return ($return)();
+            } else {
+                return $return;
+            }
         }
     }
 

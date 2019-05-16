@@ -1,6 +1,6 @@
 <?php
 namespace Rasteiner\KQLParser;
-
+use \Exception;
 
 abstract class Node {
     public $type;
@@ -23,7 +23,61 @@ class AccessNode extends Node {
     }
     public function eval(Evaluator $context, $parent=null) {
         $left = $this->left->eval($context);
-        return $this->right->eval($context, $left);
+        if(is_callable($left)) {
+            $left = ($left)();
+        }
+
+        if($this->right instanceof Node) {
+            $right = $this->right->eval($context, $this);
+        } else if (is_string($this->right)) {
+            $right = $this->right;
+        } else {
+            throw new Exception("Don't know how to use right side of Access Node", 1);
+        }
+
+        if (is_array($left)) {
+            if (isset($left[$right])) {
+                return $left[$right];
+            }
+            return null;
+        } else if (is_object($left)) {
+            if (property_exists($left, $right)) {
+                return $left->{$right};
+            } else if(method_exists($left, $right)) {
+                return \Closure::fromCallable([$left, $right]);
+            }
+        }
+    }
+}
+
+class NullCoalesceNode extends Node {
+    public $left = null;
+    public $right = null;
+    public function __construct($left, $right) {
+        parent::__construct('NullCoalesce');
+        $this->left = $left;
+        $this->right = $right;
+    }
+    public function eval(Evaluator $context, $parent=null) {
+        $left = null;
+
+        try {
+            $left = $this->left->eval($context);
+        } catch (Exception $e) {
+            //silently fail left evaluation
+        }
+        
+        if($left) {
+            return $left;
+        } else {
+            if($this->right instanceof Node) {
+                return $this->right->eval($context);
+            } elseif(is_array($this->right)) {
+                return $context->eval($this->right);
+            } else {
+                throw new Exception("Unexpected value $this->right", 1);
+            }
+        }
     }
 }
 
@@ -39,24 +93,23 @@ class ValueNode extends Node {
 }
 
 class MethodNode extends Node {
-    public $name = null;
+    public $method = null;
     public $arguments = null;
-    public function __construct($name, $arguments) {
+    public function __construct($method, $arguments) {
         parent::__construct('Method');
-        $this->name = $name;
+        $this->method = $method;
         $this->arguments = $arguments;
     }
     public function eval(Evaluator $context, $parent=null) {
-        if(!$parent) {
-            throw new Exception("Methods cannot be called on Null", 1);
-        }
-
+        $method = $this->method->eval($context, $this);
         $params = $context->eval($this->arguments);
 
-        if(is_array($parent)) {
-            return call_user_func_array($parent[$this->name], $params);
-        } else {
-            return call_user_func_array([$parent, $this->name], $params);
+        if(is_callable($method)) {
+            return call_user_func_array($method, $params);  
+        } else  {
+            echo "method:";
+            var_dump($method);
+            throw new Exception("Method not callable, $method", 1);
         }
 
     }
@@ -69,24 +122,11 @@ class SymbolNode extends Node {
         $this->name = $name;
     }
     public function eval(Evaluator $context, $parent=null) {
-        if (!$parent) {
-            if($val = $context->fetchGlobal($this->name)) {
-                return $val;
-            }
 
-            throw new Exception("$this->name not found", 1);
-        } else {
-            if(is_array($parent)) {
-                if(isset($parent[$this->name])) {
-                    return $parent[$this->name];
-                }
-                return null;
-            } else if(is_object($parent)) {
-                if(property_exists($parent, $this->name)) {
-                    return $parent->{$this->name};
-                }
-                return call_user_func_array([$parent, $this->name], []);
-            }
+        if($parent === null && $val = $context->fetchGlobal($this->name)) {
+            return $val;
         }
+
+        return $this->name;
     }
 }

@@ -43,46 +43,97 @@ $interpreter = new Interpreter([
 ]);
 
 
+function test($q, $expected) {
+    global $interpreter;
+
+    $result = $interpreter->parse($q);
+    if($result == $expected) {
+        echo "$q: ✅";
+    } else {
+        echo "$q: ❌\n";
+        echo "returned: ";
+        var_dump($result);
+        echo "\nexpected: ";
+        var_dump($expected);
+    }
+    echo "\n";
+}
+
 //accessing and running stuff
-var_dump($interpreter->parse('site.sum(number1, site.sum(12, site.foobar.cat.age))'));
-//> float(1024)
+test('site.sum(number1, site.sum(12, site.foobar.cat.age))', 1024);
 
 //accessing return value of methods
-var_dump($interpreter->parse('site.sum(site.foobar.cat.age, site.foobar.cat.makeKitten().age)'));
-//> int(13)
+test('site.sum(site.foobar.cat.age, site.foobar.cat.makeKitten().age)', 13);
+
+//access result of implicit function call
+test('site.foobar.cat.makeKitten.age', 1);
 
 //accessing properties
-var_dump($interpreter->parse('site.foobar.cat.name'));
-//> string(6) "Fluffy"
-
+test('site.foobar.cat.name', "Fluffy");
 
 //strings 
-var_dump($interpreter->parse('site.foobar.cat.say("hello \"world\"")'));
-//> string(13) "hello "world""
+test('site.foobar.cat.say("hello \"world\"")', 'hello "world"');
 
 //strings with escape chars
-var_dump($interpreter->parse('site.foobar.cat.say("hello\nworld")'));
-//> string(13) "hello 
-//> world"
+test('site.foobar.cat.say("hello\nworld")', "hello\nworld");
 
 //strings with escaped escape chars
-var_dump($interpreter->parse('site.foobar.cat.say("hello\\\\nworld")'));
-//> string(13) "hello\nworld"
+test('site.foobar.cat.say("hello\\\\nworld")', 'hello\nworld');
 
 //strings with ignored escape chars
-var_dump($interpreter->parse('site.foobar.cat.say(\'hello\nworld\')'));
-//> string(13) "hello\nworld"
+test('site.foobar.cat.say(\'hello\nworld\')', 'hello\nworld');
 
 
 // arrays
-var_dump($interpreter->parse('site.sumAll([1, 2, 3])'));
-//> float(6)
+test('site.sumAll([1, 2, 3])', 6);
 
 // complex arrays
-var_dump($interpreter->parse('site.sumAll([number1, site.sum(1000, site.foobar.cat.age), 12])'));
-//> float(2024)
-
+test('site.sumAll([number1, site.sum(1000, site.foobar.cat.age), 12])', 2024);
 
 // implicit method calling on objects
-var_dump($interpreter->parse('site.foobar.cat.say'));
-//> string(4) "meow"
+test('site.foobar.cat.say', "meow");
+
+// test simple parentheses
+test('(site.foobar).cat.say("simple parens")', "simple parens");
+
+// test complex parentheses
+test('((site.foobar).cat.say)("complex parens")', "complex parens");
+
+// simple null coalescing operator [find first]
+test('site.foobar.cat.say("nco1") ?? blah', "nco1");
+
+// simple null coalescing operator [find last]
+test( 'site.notexisting ?? site.foobar.cat.say("nco2")', "nco2");
+
+// multiple null coalescing operator [find first]
+test( 'site.foobar.cat.say("nco3") ?? blah ?? blub', "nco3");
+
+// multiple null coalescing operator [find middle]
+test( 'site.notexisting ?? site.foobar.cat.say("nco4") ?? site.stillnotexisting', "nco4");
+
+// multiple null coalescing operator [find last]
+test( 'site.notexisting ?? notreally.there ?? site.foobar.cat.say("nco5")', "nco5");
+
+// empty string, 0 and false are considered null
+test('"" ?? 0 ?? false ?? "nco6"', "nco6");
+
+// fallback to literal number
+test('site.notexisting ?? 42', 42);
+
+// fallback to literal string
+test('site.notexisting ?? "string"', "string");
+
+// fallback to literal array
+test('site.notexisting ?? [42, "string", true, site.foobar.cat.say, site.foobar.cat.say("foobar")]', 
+    [42, "string", true, "meow", "foobar"]
+);
+
+// complex null coalescing example
+test('(site.foobar.cat.notexisting ?? site.foobar.cat.say)(site.foobar.cat.name)', "Fluffy");
+
+
+// access fallback literal array (also numeric indexes)
+test(
+    '(site.notexisting ?? [42, "string", true, site.foobar.cat, site.foobar.cat.say("foobar")]).3.say',
+    "meow"
+);
