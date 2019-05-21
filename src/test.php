@@ -2,7 +2,7 @@
 
 require __DIR__ . '/Interpreter.php';
 
-use Rasteiner\KQLParser\Interpreter;
+use Rasteiner\KQL\Interpreter;
 
 class Cat {
     private $_age = 12;
@@ -25,7 +25,45 @@ class Cat {
     }
 }
 
+function testFail($q) {
+    // here I give the evaluator a state to work on. These are the allowed starting variables. 
+    $interpreter = new Interpreter([
+        'number1' => 1000,
 
+        'site' => [
+            'foobar' => [
+                'cat' => new Cat()
+            ],
+            'sum' => function ($a = 1, $b = 1) {
+                return $a + $b;
+            },
+            'sumAll' => function (array $numbers) {
+                return array_reduce($numbers, function ($all, $one) {
+                    return $all + $one;
+                }, 0);
+            }
+        ]
+    ]);
+
+    $failed = false;
+    try {
+        $result = $interpreter->parse($q);
+    } catch(\Throwable $th) {
+        $failed = true;
+    }
+
+
+    if ($failed) {
+        echo "$q: ✅";
+    } else {
+        echo "$q: ❌\n";
+        echo "should have failed, but returned";
+        var_dump($result);
+        exit;
+    }
+    echo "\n";
+
+}
 
 
 function test($q, $expected) {
@@ -57,9 +95,12 @@ function test($q, $expected) {
         var_dump($result);
         echo "\nexpected: ";
         var_dump($expected);
+        exit;
     }
     echo "\n";
 }
+
+test('[1000, 2000, 3000][2]', 3000);
 
 //accessing and running stuff
 test('site.sum(number1, site.sum(12, site.foobar.cat.age))', 1024);
@@ -133,9 +174,11 @@ test('site.notexisting ?? [42, "string", true, site.foobar.cat.say, site.foobar.
 // complex null coalescing example
 test('(site.foobar.cat.notexisting ?? site.foobar.cat.say)(site.foobar.cat.name)', "Fluffy");
 
+//should not allow access to php functions
+testFail('strtoupper("upper")');
 
 // access fallback literal array (also numeric indexes)
 test(
-    '(site.notexisting ?? [42, "string", true, site.foobar.cat, site.foobar.cat.say("foobar")]).3.say',
+    '(site.notexisting ?? [42, "string", true, site.foobar.cat, site.foobar.cat.say("foobar")])[3].say',
     "meow"
 );

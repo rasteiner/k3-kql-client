@@ -1,148 +1,215 @@
 <?php
-namespace Rasteiner\KQLParser;
-use \Exception;
-use Kirby\Toolkit\Collection;
-use Kirby\Cms\Field;
+
+namespace Rasteiner\KQL;
+
+use Exception;
 
 abstract class Node {
-    public $type;
+    public abstract function eval(Context $context, $parent = null);
 
-    public function __construct($type) {
-        $this->type = $type;
-    }
+    public static function recursiveEval(Context $context, $nodes) {
+        if(is_array($nodes)) {
 
-    abstract public function eval(Evaluator $context, $parent=null);
-}
+            $values = [];
+            foreach ($nodes as $node) {
+                $values[] = self::recursiveEval($context, $node);
+            }
+            return $values;
 
-
-class AccessNode extends Node {
-    public $left = null;
-    public $right = null;
-    public function __construct($left, $right) {
-        parent::__construct('Access');
-        $this->left = $left;
-        $this->right = $right;
-    }
-    public function eval(Evaluator $context, $parent=null) {
-        $left = $this->left->eval($context);
-        if(is_callable($left)) {
-            $left = ($left)();
-        }
-
-        if($this->right instanceof Node) {
-            $right = $this->right->eval($context, $this);
-        } else if (is_string($this->right)) {
-            $right = $this->right;
         } else {
-            throw new Exception("Don't know how to use right side of Access Node", 1);
-        }
 
-        if (is_array($left)) {
-            if (isset($left[$right])) {
-                return $left[$right];
+            $e = $nodes->eval($context);
+            if (is_a($e, 'Closure')) {
+                $e = ($e)();
             }
-            return null;
-        } else if (is_object($left)) {
-            
-            if(is_callable([$left, $right])) {
-                return \Closure::fromCallable([$left, $right]);
-            } else if (property_exists($left, $right)) {
-                return $left->{$right};
-            }
+            return $e;
+
         }
     }
 }
 
-class NullCoalesceNode extends Node {
-    public $left = null;
-    public $right = null;
-    public function __construct($left, $right) {
-        parent::__construct('NullCoalesce');
+class Projection extends Node {
+    /**
+     * @var Node $left
+     */
+    protected $left = null;
+
+    /**
+     * @var array $right
+     */
+    protected $right = null;
+
+    public function __construct(Node $left, array $right) {
         $this->left = $left;
         $this->right = $right;
     }
-    public function eval(Evaluator $context, $parent=null) {
-        $left = null;
 
+    public function eval(Context $context, $parent = null) {
+        $left = $this->left->eval($context);
+        $result = []; 
+        foreach ($this->right as $id) {
+            try {
+                $result[$id] = Access::access($context, $left, $id);
+            } catch (\Throwable $th) { }
+        }
+    }
+}
+
+class Coalesce extends Node {
+    /**
+     * @var Node $left
+     */
+
+    protected $left = null;
+    /**
+     * @var Node $right
+     */
+    protected $right = null;
+
+    public function __construct(Node $left, Node $right) {
+        $this->left = $left;
+        $this->right = $right;
+    }
+
+    public function eval(Context $context, $parent = null) {
         try {
             $left = $this->left->eval($context);
-            if(is_callable($left)) {
-                $left = call_user_func($left);
-            }
-        } catch (Exception $e) {
-            //silently fail left evaluation
-        }
-        
-        if($left instanceof Field) {
-            //Kirby specific method to evaluate if a field is empty
-            if($left->isEmpty()) {
-                $left = false;
-            }
-        } else if ($left instanceof Collection) {
-            //Kirby specific method to evaluate if a collection is empty
-            if ($left->count() === 0) {
-                $left = false;
-            }
+        } catch (\Throwable $th) {
+            $left = false;
         }
 
         if($left) {
-            return $left;
-        } else {
-            if($this->right instanceof Node) {
-                return $this->right->eval($context);
-            } elseif(is_array($this->right)) {
-                return $context->eval($this->right);
-            } else {
-                throw new Exception("Unexpected value $this->right", 1);
+            if( !(
+                is_array($left) && count($left) == 0
+                || is_a($left, 'Kirby\\Toolkit\\Iterator') && $left->count() == 0
+                || is_a($left, 'Kirby\\Cms\\Field') && $left->isEmpty()
+            )) {
+                return $left;
             }
         }
+
+        return $this->right->eval($context);
     }
 }
 
-class ValueNode extends Node {
-    public $value = null;
+
+class Method extends Node
+{
+    protected $method = null;
+    protected $params = null;
+
+    public function __construct(Node $method, $params = [])
+    {
+        $this->method = $method;
+        $this->params = $params;
+    }
+
+    public function eval( Context $context, $parent = null)
+    {
+        $method = $this->method->eval($context, $parent);
+        $params = self::recursiveEval($context, $this->params);
+
+        if (is_callable($method)) {
+            return call_user_func_array($method, $params);
+        } else {
+            throw new Exception("Not a function", 1);
+        }
+    }
+}
+
+
+class Access extends Node {
+    /**
+     * @var Node $left
+     */
+    protected $left = null;
+
+    /**
+     * @var Node $right
+     */
+    protected $right = null;
+
+    public function __construct(Node $left, Node $right) {
+        $this->left = $left;
+        $this->right = $right;
+    }
+
+    public static function access($context, $left, $id) {
+        if (!$context->canAccess($left, $id)) {
+            throw new Exception("Cannot access $id on " . get_class($left), 1);
+        }
+
+        if (
+            is_a($left, 'Kirby\\Cms\\Collection') && is_int($id)
+        ) {
+            return $left->nth($id);
+        } elseif (
+            is_a($left, 'Kirby\\Cms\\Field')
+            || is_a($left, 'Kirby\\Cms\\Model')
+            || is_a($left, 'Kirby\\Cms\\Collection')
+            || method_exists($left, $id)
+        ) {
+            return \Closure::fromCallable([$left, $id]);
+        } elseif (is_array($left)) {
+            if (key_exists($id, $left)) {
+                return $left[$id];
+            } else {
+                throw new Exception("Undefined array index", 1);
+            }
+        } elseif (property_exists($left, $id)) {
+            return $left->{$id};
+        } else {
+            //just throw a method call at it
+            return \Closure::fromCallable([$left, $id]);
+        }
+    }
+
+    public function eval( Context $context, $parent = null) {
+        $left = $this->left->eval($context);
+        if(is_a($left, 'Closure')) {
+            $left = ($left)();
+        }
+
+        $id = $this->right->eval($context, $left);
+
+        return self::access($context, $left, $id);
+    }
+}
+
+class Identifier extends Node {
+    protected $id = null;
+
+    public function __construct(string $id) {
+        $this->id = $id;
+    }
+
+    public function eval( Context $context, $parent = null) {
+        if($parent) {
+            return $this->id;
+        } else {
+            if(key_exists($this->id, $context->globals)) {
+                return $context->globals[$this->id];
+            } else {
+                throw new Exception("Unknown variable $this->id", 1);
+            }
+        }
+
+        return null;
+    }
+}
+
+class Value extends Node {
+    protected $value = null;
+
     public function __construct($value) {
-        parent::__construct('Value');
         $this->value = $value;
     }
-    public function eval(Evaluator $context, $parent=null) {
-        return $this->value;
-    }
-}
 
-class MethodNode extends Node {
-    public $method = null;
-    public $arguments = null;
-    public function __construct($method, $arguments) {
-        parent::__construct('Method');
-        $this->method = $method;
-        $this->arguments = $arguments;
-    }
-    public function eval(Evaluator $context, $parent=null) {
-        $method = $this->method->eval($context, $this);
-        $params = $context->eval($this->arguments);
-
-        if(is_callable($method)) {
-            return call_user_func_array($method, $params);  
-        } else  {
-            throw new Exception("Method not callable, $method", 1);
+    public function eval(Context $context, $parent = null) {
+        if(is_array($this->value)) {
+            return self::recursiveEval($context, $this->value);
+        } else {
+            return $this->value;
         }
-
-    }
-}
-
-class SymbolNode extends Node {
-    public $name = null;
-    public function __construct($name) {
-        parent::__construct('Symbol');
-        $this->name = $name;
-    }
-    public function eval(Evaluator $context, $parent=null) {
-
-        if($parent === null && $val = $context->fetchGlobal($this->name)) {
-            return $val;
-        }
-
-        return $this->name;
     }
 }

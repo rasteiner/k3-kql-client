@@ -1,8 +1,7 @@
 <?php
+namespace Rasteiner\KQL;
 
-namespace Rasteiner\KQLParser;
-
-require 'Parser.php';
+require __DIR__ . '/Parser.php';
 
 class Interpreter
 {
@@ -12,66 +11,106 @@ class Interpreter
     private static $astCache = [];
 
     /**
-     * @var Evaluator
+     * @var Context $context
      */
-    private $ev;
+    private $context = null;
 
+    
     /**
      * @var Parser
      */
     private $parser;
 
-    public function __construct(array $globals = [])
+    public function __construct(Context $context)
     {
-        $this->ev = new Evaluator($globals);
+        $this->context = $context;
         $this->parser = new Parser();
     }
 
     public function parse($text)
     {
-        if(isset(self::$astCache[$text])) {
+        if (isset(self::$astCache[$text])) {
             $ast = self::$astCache[$text];
         } else {
             $ast = $this->parser->parse($text);
             self::$astCache[$text] = $ast;
         }
-        
-        return $this->ev->eval($ast);
+
+        $result = $ast->eval($this->context);
+        if(is_a($result, 'Closure')) {
+            return ($result)();
+        } else {
+            return $result;
+        }
     }
 }
 
+class Blacklist {
+    /**
+     * @var array 
+     */
+    public $blacklist = [];
 
-class Evaluator
-{
-    private $globals = null;
-
-    public function __construct(array $globals = [])
+    public function __construct(array $blacklist)
     {
-        $this->globals = $globals;
-    }
-
-    public function eval($node)
-    {
-        if (is_array($node)) {
-            return array_map(function ($node) {
-                return Evaluator::eval($node);
-            }, $node);
-        } else {
-            $return = $node->eval($this);
-            if (is_callable($return)) {
-                return ($return)();
-            } else {
-                return $return;
+        foreach ($blacklist as $classname => $class) {
+            foreach ($class as $property) {
+                $this->addToBlacklist($classname, $property);
             }
         }
     }
 
-    public function fetchGlobal($name)
+    public function addToBlacklist($parent, $property)
     {
-        if (isset($this->globals[$name])) {
-            return $this->globals[$name];
-        } else {
-            return null;
+        $parent = strtolower($parent);
+        $property = strtolower($property);
+
+        $this->blacklist[$parent][$property] = 1;
+    }
+
+    public function canAccess($parent, $property)
+    {
+        $property = strtolower($property);
+
+        foreach ($this->blacklist as $classname => $deniedProperties) {
+            if (is_a($parent, $classname)) {
+                if (key_exists($property, $deniedProperties)) {
+                    return false;
+                }
+            }
         }
+
+        return true;
+    }
+
+}
+
+class Context {
+    /**
+     * @var array 
+     */
+    public $globals = null;
+
+    /**
+     * @var Blacklist 
+     */
+    public $blacklist = null;
+
+    public function __construct($globals = [], $blacklist = []) {
+        $this->globals = $globals;
+        if(is_a($blacklist, "rasteiner\\kql\\blacklist")) {
+            $this->blacklist = $blacklist;
+        } else {
+            $this->blacklist = new Blacklist($blacklist);
+            
+        }
+    }
+
+    public function addToBlacklist($parent, $property) {
+        return $this->blacklist->addToBlacklist($parent, $property);
+    }
+
+    public function canAccess($parent, $property) {
+        return $this->blacklist->canAccess($parent, $property);
     }
 }
