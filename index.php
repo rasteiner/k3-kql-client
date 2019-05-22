@@ -3,10 +3,11 @@
 use rasteiner\kql\Interpreter;
 use rasteiner\kql\Context;
 use Kirby\Exception\Exception;
-use Rasteiner\KQL\Blacklist;
+use Rasteiner\KQL\FunctionList;
 
 class KQL {
     protected static $_blacklist = null;
+    protected static $_whitelist = null;
 
     public static function clientScript() {
         return attr([
@@ -18,25 +19,43 @@ class KQL {
 
     public static function project($obj, $fields) {
         $projection = [];
-        $blacklist = self::blacklist();
 
         if($obj) {
-            foreach ($fields as $field => $sub) {
-                if(!$blacklist->canAccess($obj, $field)) continue;
-                
-                $result = $obj->$field();
+            $interpreter = new Interpreter(
+                new Context(
+                    [
+                        'this' => $obj
+                    ], 
+                    self::blacklist(),
+                    self::whitelist()
+                )
+            );
 
-                if(is_array($sub)) {
-                    $projection[$field] = KQL::project($result, $sub);
-                } else {
-                    if($sub) {
-                        $projection[$field] = $result;
-                    }
-                }
+            foreach ($fields as $field => $query) {
+                $projection[$field] = $interpreter->parse($query);
             }
         }
 
         return $projection;
+    }
+
+
+    public static function whitelist()
+    {
+        if (self::$_whitelist) return self::$_whitelist;
+
+        //this is the hardcoded default whitelist
+        $defaultWhitelist = [];
+
+        $whitelist = new FunctionList($defaultWhitelist);
+
+        //merge config whitelist with defaults
+        $configWhitelist = option('rasteiner.kql.whitelist', null);
+        if($configWhitelist) {
+            $whitelist->addArray($configWhitelist);
+        }
+
+        return self::$_whitelist = $whitelist;
     }
 
     public static function blacklist() {
@@ -47,22 +66,17 @@ class KQL {
             'Kirby\\Cms\\User' => ['loginPasswordless'],
             'Kirby\\Cms\\App' => ['impersonate'],
             'Kirby\\Cms\\Model' => ['query', 'drafts', 'childrenAndDrafts', 'toString', 'createNum'],
-
         ];
 
         //should the default blacklist be ignored
         $ignoreDefaultBlacklist = option('rasteiner.kql.override-default-blacklist', false);
         $blacklist = $ignoreDefaultBlacklist ? [] : $defaultBlacklist;
 
-        $blacklist = new Blacklist($blacklist);
+        $blacklist = new FunctionList($blacklist);
 
         //merge config blacklist with defaults
         $configBlacklist = option('rasteiner.kql.blacklist', []);
-        foreach ($configBlacklist as $classname => $props) {
-            foreach ($props as $prop) {
-                $blacklist->addToBlacklist($classname, $prop);
-            }
-        }
+        $blacklist->addArray($configBlacklist);
 
         return self::$_blacklist = $blacklist;
     }
@@ -71,13 +85,15 @@ class KQL {
 load([
     'rasteiner\kql\interpreter' => 'Interpreter.php',
     'rasteiner\kql\context' => 'Interpreter.php',
-    'rasteiner\kql\blacklist' => 'Interpreter.php'
+    'rasteiner\kql\functionlist' => 'Interpreter.php'
 ], __DIR__ . '/src');
 
 Kirby::plugin('rasteiner/kql', [
     'options' => [
         'override-default-blacklist' => false,
         'blacklist' => [],
+        'whitelist' => null,
+        'public' => false,
         'get-globals' => function() {
             return [
                 'site' => site()
@@ -105,6 +121,14 @@ Kirby::plugin('rasteiner/kql', [
                 'auth' => false,
                 'method' => 'post',
                 'action' => function() {
+                    //should this api be accessible to not logged in visitors? 
+                    $public = option('rasteiner.kql.public', false);
+                    if(!$public) {
+                        if(kirby()->user() === null) {
+                            throw new Exception('API not public');
+                        }
+                    }
+
                     //check csrf
                     $csrf = $this->requestBody('csrf', 'a');
                     $query = $this->requestBody('query', false);
@@ -113,10 +137,10 @@ Kirby::plugin('rasteiner/kql', [
 
                     
                     if(!csrf($csrf)) {
-                        throw new Exception();                        
+                        throw new Exception('Invalid CSRF');                        
                     }
                     if (empty($query)) {
-                        throw new Exception();
+                        throw new Exception('Empty query');
                     }
 
                     //give submitted values a name
@@ -134,7 +158,9 @@ Kirby::plugin('rasteiner/kql', [
                     $myglobals = array_replace($values, $myglobals);
 
                     $blacklist = KQL::blacklist();
-                    $context = new Context($myglobals, $blacklist);
+                    $whitelist = KQL::whitelist();
+
+                    $context = new Context($myglobals, $blacklist, $whitelist);
 
                     //create interpreter
                     $interpreter = new Interpreter($context);

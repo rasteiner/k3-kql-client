@@ -2,12 +2,12 @@
 
 Run extended Kirby queries in your frontend. This is an alternative to the standard Kirby API Client. 
 
-> This plugin is completely free and published "as is" under the MIT license. However, if you are using it in a commercial project and want to help me keep up with maintenance, please consider [buying me caffeine](https://buymeacoff.ee/zLFxgCHlG) or purchasing your license(s) through my [affiliate link](https://a.paddle.com/v2/click/1129/36164?link=1170).
+> This plugin is completely free and published "as is" under the MIT license. However, if you are using it in a commercial project, this work is saving you some time or you just want to help me keep up with maintenance, please consider [buying me caffeine](https://buymeacoff.ee/zLFxgCHlG) or purchasing your license(s) through my [affiliate link](https://a.paddle.com/v2/click/1129/36164?link=1170).
 
 ## Example: Get all listed notes
 
 ```js
-await kql `site.page("notes").children.listed.project(${ { title: 1, tags: {split: 1} } })`
+await kql `notes.children.listed.limit(3).project(${ { title: 'this.title.value', tags: 'this.tags.split' } })`
 ```
 
 Results in: 
@@ -15,26 +15,27 @@ Results in:
 ```json
 {
   "https://example.com/notes/across-the-ocean": {
-    "title": {
-      "value": "Across the ocean"
-    },
-    "tags": {
-      "split": [
-        "ocean",
-        "pacific"
-      ]
-    }
+    "title": "Across the ocean",
+    "tags": [
+      "ocean",
+      "pacific"
+    ]
   },
   "https://example.com/notes/a-night-in-the-forest": {
-    "title": {
-      "value": "A night in the forest"
-    },
-    "tags": {
-      "split": [
-        "forest",
-        "trees"
-      ]
-    }
+    "title": "A night in the forest",
+    "tags": [
+      "forest",
+      "trees"
+    ]
+  },
+  "https://example.com/notes/in-the-jungle-of-sumatra": {
+    "title": "In the jungle of Sumatra",
+    "tags": [
+      "jungle",
+      "nature",
+      "sumatra",
+      "plants"
+    ]
   }
 }
 ```
@@ -128,19 +129,20 @@ await kql `site.page('notes').createChild(${newNote})`
 ```
 
 #### Projections
-The plugin also includes a new "Pages Method" and a "Page Method" to help retrieve the values we are interested in.
+The plugin also includes a "Pages Method" and a "Page Method", both called `project` which helps retrieving the values we are interested in.
+The "mapping" works by passing the `project` method an object, where you associate a key to a query.
+
+`this` refers to the "current page".
+
+Example:
 
 ```js
 const countChildrenProjection = { 
-  title: 1,
-  children: { 
-    listed: {
-      count: 1
-    }
-  }
+  title: 'this.title.html.value',
+  childCount: 'this.children.listed.count'
 }
 
-await kql `site.index.limit(2).project(${ countChildrenProjection })`
+await kql `site.children.listed.project(${ countChildrenProjection })`
 ```
 
 returns:
@@ -148,24 +150,16 @@ returns:
 ```json
 {
   "https://example.com/photography": {
-    "title": {
-      "value": "Photography"
-    },
-    "children": {
-      "listed": {
-        "count": 9
-      }
-    }
+    "title": "Photography",
+    "childCount": 9
   },
-  "https://example.com/photography/animals": {
-    "title": {
-      "value": "Animals"
-    },
-    "children": {
-      "listed": {
-        "count": 0
-      }
-    }
+  "https://example.com/notes": {
+    "title": "Notes",
+    "childCount": 7
+  },
+  "https://example.com/about": {
+    "title": "About us",
+    "childCount": 0
   }
 }
 ```
@@ -192,9 +186,43 @@ return [
 ];
 ```
 
-### Blacklisting methods
+### Enabling public access
+By default the API is restricted to only loggen in users. If you need the api to be public, set the `rasteiner.kql.public` config value to `true`.
+When enabling public access, security becomes even more important; consider setting up a Whitelist of allowed function calls. 
 
-*With great power comes great responsability...*
+### Whitelisting methods
+By default no whitelist is set up. You can create one in your config file. 
+
+Only methods present in the whitelist will be callable directly from the query.
+This doesn't mean that they can't be called at all: if you whitelist method **A** and not method **B**. Method **B** can still be called by **A**.
+
+Example config:
+
+```php
+<?php
+
+return [
+    'rasteiner.kql.whitelist' => [
+        'Kirby\\Cms\\Pages' => [
+            'listed',
+            'project',
+        ],
+        'Kirby\\Cms\\Page' => [
+            'children',
+            'title',
+            'tags'
+        ],
+        'Kirby\\Cms\\Field' => [
+            'html',
+            'value',
+            'split'
+        ]
+    ]
+];
+```
+
+
+### Blacklisting methods
 
 By default access to these methods is denied:
 
@@ -207,6 +235,8 @@ Kirby\Cms\Model::query
 Kirby\Cms\Model::toString
 Kirby\Cms\Model::createNum
 ```
+
+Values in the blacklist override those in the whitelist.
 
 You can add your own via the `rasteiner.kql.blacklist` config option.
 

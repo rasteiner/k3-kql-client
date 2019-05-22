@@ -135,8 +135,8 @@ class Access extends Node {
     }
 
     public static function access($context, $left, $id) {
-        if (!$context->canAccess($left, $id)) {
-            throw new Exception("Cannot access $id on " . get_class($left), 1);
+        if (!is_array($left) && !$context->canAccess($left, $id)) {
+            throw new Exception("Cannot access $id", 1);
         }
 
         if (

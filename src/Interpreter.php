@@ -45,46 +45,52 @@ class Interpreter
     }
 }
 
-class Blacklist {
+class FunctionList {
     /**
      * @var array 
      */
-    public $blacklist = [];
+    public $list = [];
 
-    public function __construct(array $blacklist)
-    {
-        foreach ($blacklist as $classname => $class) {
-            foreach ($class as $property) {
-                $this->addToBlacklist($classname, $property);
+    public function __construct(array $list) {
+        $this->addArray($list);
+    }
+
+    public function isEmpty() {
+        return count($this->list) === 0;
+    }
+
+    public function add($parent, $property) {
+        $parent = strtolower($parent);
+        $property = strtolower($property);
+
+        $this->list[$parent][$property] = 1;
+    }
+
+    public function addArray(array $arr) {
+        foreach ($arr as $classname => $props) {
+            foreach ($props as $prop) {
+                $this->add($classname, $prop);
             }
         }
     }
 
-    public function addToBlacklist($parent, $property)
-    {
-        $parent = strtolower($parent);
-        $property = strtolower($property);
-
-        $this->blacklist[$parent][$property] = 1;
-    }
-
-    public function canAccess($parent, $property)
+    public function has($parent, $property)
     {
         $property = strtolower($property);
 
-        foreach ($this->blacklist as $classname => $deniedProperties) {
+        foreach ($this->list as $classname => $deniedProperties) {
             if (is_a($parent, $classname)) {
                 if (key_exists($property, $deniedProperties)) {
-                    return false;
+                    return true;
                 }
             }
         }
 
-        return true;
+        return false;
     }
 
 }
-
+ 
 class Context {
     /**
      * @var array 
@@ -92,25 +98,37 @@ class Context {
     public $globals = null;
 
     /**
-     * @var Blacklist 
+     * @var FunctionList 
      */
     public $blacklist = null;
 
-    public function __construct($globals = [], $blacklist = []) {
+    /**
+     * @var FunctionList 
+     */
+    public $whitelist = null;
+
+    public function __construct($globals = [], $blacklist = [], $whitelist = []) {
         $this->globals = $globals;
-        if(is_a($blacklist, "rasteiner\\kql\\blacklist")) {
+        if(is_a($blacklist, "rasteiner\\kql\\functionlist")) {
             $this->blacklist = $blacklist;
         } else {
-            $this->blacklist = new Blacklist($blacklist);
-            
+            $this->blacklist = new FunctionList($blacklist);
+        }
+
+        if (is_a($whitelist, "rasteiner\\kql\\functionlist")) {
+            $this->whitelist = $whitelist;
+        } else {
+            $this->whitelist = new FunctionList($whitelist);
         }
     }
 
-    public function addToBlacklist($parent, $property) {
-        return $this->blacklist->addToBlacklist($parent, $property);
-    }
-
     public function canAccess($parent, $property) {
-        return $this->blacklist->canAccess($parent, $property);
+        if(!$this->whitelist->isEmpty()) {
+            if(!$this->whitelist->has($parent, $property)) {
+                return false;
+            }
+        }
+
+        return false === $this->blacklist->has($parent, $property);
     }
 }
