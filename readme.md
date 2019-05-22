@@ -4,7 +4,7 @@ Run extended Kirby queries in your frontend. This is an alternative to the stand
 
 > This plugin is completely free and published "as is" under the MIT license. However, if you are using it in a commercial project, this work is saving you some time or you just want to help me keep up with maintenance, please consider [buying me caffeine](https://buymeacoff.ee/zLFxgCHlG) or purchasing your license(s) through my [affiliate link](https://a.paddle.com/v2/click/1129/36164?link=1170).
 
-## Example: Get all listed notes
+## Example: Get the first 3 listed notes
 
 ```js
 await kql `notes.children.listed.limit(3).project(${ { title: 'this.title.value', tags: 'this.tags.split' } })`
