@@ -69,6 +69,28 @@ await kql `(site.page("not-existing") ?? site.page("also-not-existing")).title.h
 // > "Fallback"
 ```
 
+#### Array Subscript Operator (`[index]`)
+Get access to an element of an array or a Kirby Collection with square brackets (like in javascript).
+This also allows you to dynamically define the index with an expression or use indexes that wouldn't otherwise be allowed by the `.` operator syntax. 
+
+When used on a Kirby Collection it acts as syntax sugar for [`$collection->nth()`](https://getkirby.com/docs/reference/@/cms/collection/nth)
+
+Examples:
+```js 
+await kql `["this", "is", "an", "array"][3]`
+//> "array"
+
+await kql `notes.children.listed[doubleOf(2)]` //you need to have "notes" and "doubleOf" defined in config
+//> the fourth listed note 
+
+
+const obj = {
+    "not an ideal property name": "hello"
+}
+await kql `${obj}["not an ideal property name"]`
+//> "hello"
+```
+
 #### Configurable server values:
 The variables you have access to are configurable ([see below](#global-variables)).
 
