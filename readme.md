@@ -81,7 +81,7 @@ await kql `["this", "is", "an", "array"][3]`
 //> "array"
 
 await kql `notes.children.listed[doubleOf(2)]` //you need to have "notes" and "doubleOf" defined in config
-//> the fourth listed note 
+//> the 4th listed note 
 
 
 const obj = {
@@ -201,8 +201,11 @@ By default access to these methods is denied:
 ```
 Kirby\Cms\User::loginPasswordless
 Kirby\Cms\App::impersonate
-Kirby\Cms\ModelWithContent::drafts
-Kirby\Cms\ModelWithContent::childrenAndDrafts
+Kirby\Cms\Model::drafts
+Kirby\Cms\Model::childrenAndDrafts
+Kirby\Cms\Model::query
+Kirby\Cms\Model::toString
+Kirby\Cms\Model::createNum
 ```
 
 You can add your own via the `rasteiner.kql.blacklist` config option.

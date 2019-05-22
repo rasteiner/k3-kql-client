@@ -46,7 +46,8 @@ class KQL {
         $defaultBlacklist = [
             'Kirby\\Cms\\User' => ['loginPasswordless'],
             'Kirby\\Cms\\App' => ['impersonate'],
-            'Kirby\\Cms\\ModelWithContent' => ['drafts', 'childrenAndDrafts']
+            'Kirby\\Cms\\Model' => ['query', 'drafts', 'childrenAndDrafts', 'toString', 'createNum'],
+
         ];
 
         //should the default blacklist be ignored
