@@ -3,6 +3,7 @@
 require __DIR__ . '/Interpreter.php';
 
 use Rasteiner\KQL\Interpreter;
+use Rasteiner\KQL\Context;
 
 class Cat {
     private $_age = 12;
@@ -27,7 +28,7 @@ class Cat {
 
 function testFail($q) {
     // here I give the evaluator a state to work on. These are the allowed starting variables. 
-    $interpreter = new Interpreter([
+    $interpreter = new Interpreter(new Context([
         'number1' => 1000,
 
         'site' => [
@@ -43,7 +44,7 @@ function testFail($q) {
                 }, 0);
             }
         ]
-    ]);
+    ]));
 
     $failed = false;
     try {
@@ -68,7 +69,7 @@ function testFail($q) {
 
 function test($q, $expected) {
     // here I give the evaluator a state to work on. These are the allowed starting variables. 
-    $interpreter = new Interpreter([
+    $interpreter = new Interpreter(new Context([
         'number1' => 1000,
 
         'site' => [
@@ -84,7 +85,7 @@ function test($q, $expected) {
                 }, 0);
             }
         ]
-    ]);
+    ]));
 
     $result = $interpreter->parse($q);
     if($result == $expected) {
