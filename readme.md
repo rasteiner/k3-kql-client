@@ -39,7 +39,16 @@ Results in:
 }
 ```
 
+## Install
+Download and extract or git submodule this repository into a folder of `site/plugins`.
 
+### Include script into template
+The client script needs to be loaded. The simplest way is to use the `KQL::clientScript()` helper.
+
+```php
+<?= KQL::clientScript() ?>
+```
+This produces a script tag with the necessary configuration automatically. 
 
 ## Syntax
 The query syntax is an extension of the Kirby query syntax offered in 3.2.
