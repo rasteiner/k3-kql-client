@@ -129,7 +129,7 @@ await kql `site.page('notes').createChild(${newNote})`
 ```
 
 #### Projections
-The plugin also includes a "Pages Method" and a "Page Method", both called `project` which helps retrieving the values we are interested in.
+The plugin also includes a "Pages Method" and a "Page Method", both called `project`, which help retrieving the values we are interested in.
 The "mapping" works by passing the `project` method an object, where you associate a key to a query.
 
 `this` refers to the "current page".
@@ -187,7 +187,7 @@ return [
 ```
 
 ### Enabling public access
-By default the API is restricted to only loggen in users. If you need the api to be public, set the `rasteiner.kql.public` config value to `true`.
+By default the API is restricted to only logged in users. If you need the api to be public, set the `rasteiner.kql.public` config value to `true`.
 When enabling public access, security becomes even more important; consider setting up a Whitelist of allowed function calls. 
 
 ### Whitelisting methods
