@@ -191,7 +191,8 @@ By default the API is restricted to only logged in users. If you need the api to
 When enabling public access, security becomes even more important; consider setting up a Whitelist of allowed function calls. 
 
 ### Whitelisting methods
-By default no whitelist is set up. You can create one in your config file. 
+By default no whitelist is set up. This means that all methods that aren't blacklisted can be called. 
+You can enable whitelisting, and therefore restrict access to the specified methods, by configuring a list. 
 
 Only methods present in the whitelist will be callable directly from the query.
 This doesn't mean that they can't be called at all: if you whitelist method **A** and not method **B**. Method **B** can still be called by **A**.
